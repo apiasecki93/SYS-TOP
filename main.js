@@ -1,45 +1,76 @@
-const { app, BrowserWindow, Menu } = require('electron')
+const { app, Menu, ipcMain} = require('electron')
 const log = require('electron-log')
+const Store = require('./Store')
+const path = require('path')
+const MainWindow = require('./MainWindow')
+const AppTray = require('./AppTray')
+
 
 // Set env
-process.env.NODE_ENV = 'development'
+// process.env.NODE_ENV = 'development'
+process.env.NODE_ENV = 'production'
+
 
 const isDev = process.env.NODE_ENV !== 'production' ? true : false
 const isMac = process.platform === 'darwin' ? true : false
 
-let mainWindow
+let mainWindow;
+let tray;
 
-function createMainWindow() {
-  mainWindow = new BrowserWindow({
-    title: 'APP NAME',
-    width: isDev ? 800 : 355,
-    height: 500,
-    icon: './assets/icons/icon.png',
-    resizable: isDev ? true : false,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+//Init store & defaults
+const store = new Store({
+    configName: 'user-settings',
+    defaults: {
+      settings: {
+        cpuOverload:80,
+        alertFrequency: 5,
+      },
     },
   })
 
-  if (isDev) {
-    mainWindow.webContents.openDevTools()
-  }
-
-  mainWindow.loadFile('./app/index.html')
+function createMainWindow() {
+  mainWindow = new MainWindow('./app/index.html', isDev)
 }
 
 app.on('ready', () => {
   createMainWindow()
 
+  mainWindow.webContents.on('dom-ready', () => {
+    mainWindow.webContents.send('settings:get', store.get('settings'))
+  })
+
   const mainMenu = Menu.buildFromTemplate(menu)
   Menu.setApplicationMenu(mainMenu)
+
+  mainWindow.on('close', e => {
+    if(!app.isQuitting) {
+      e.preventDefault()
+      mainWindow.hide()
+    }
+
+    return true
+  })
+
+  const icon = path.join(__dirname, 'assets', 'icons', 'tray_icon.png')
+
+  //Crete try instance
+  tray = new AppTray(icon, mainWindow)
 })
+  
 
 const menu = [
   ...(isMac ? [{ role: 'appMenu' }] : []),
   {
     role: 'fileMenu',
+  },
+  {
+    label: 'View',
+    submenu: [
+      {
+        label: 'Toggle Navigation',
+        click: () => mainWindow.webContents.send('nav:toggle'),
+      },
+    ]
   },
   ...(isDev
     ? [
@@ -55,6 +86,14 @@ const menu = [
       ]
     : []),
 ]
+
+//Set settings used on method is to catch things from the render process
+ipcMain.on('settings:set', (e, value) => {
+  store.set('settings', value)
+
+  mainWindow.webContents.send('settings:get', store.get('settings'))
+})
+
 
 app.on('window-all-closed', () => {
   if (!isMac) {

@@ -1,6 +1,6 @@
 const path = require('path');
 const osu = require('node-os-utils');
-
+const {ipcRenderer} = require('electron')
 
 
 const cpu = osu.cpu
@@ -9,11 +9,14 @@ const os = osu.os
 
 //console.log(cpu)
 
-let cpuOverload = 80 //If cpu will hic up to 80% it will run needed function
-let alertFrequency = 5 //How often will be alerted per min if cpuOverload will hit needed range
+let cpuOverload;  // = 80 If cpu will hic up to 80% it will run needed function
+let alertFrequency; //  = 5 How often will be alerted per min if cpuOverload will hit needed range
 
-
-
+// Get settings & values 
+ipcRenderer.on('settings:get', (e, settings) => {
+    cpuOverload = +settings.cpuOverload
+    alertFrequency = +settings.alertFrequency
+})
 
 
 //run every 2 secodns
@@ -80,10 +83,10 @@ mem.info().then(info => {
 
  //SHow days, hours, mins, seconds
  function secondsToDhms(seconds) {
-    seconds =+ seconds
+    seconds = +seconds
     const d = Math.floor(seconds / (3600 * 24))
-    const h = Math.floor(seconds % (3600 * 24) / 3600)
-    const m = Math.floor(seconds % 3600 / 60)
+    const h = Math.floor((seconds % (3600 * 24)) / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
     const s = Math.floor(seconds % 60)
 
     return `${d} days, ${h} hours, ${m} min, ${s} sec`
@@ -96,7 +99,7 @@ function notifyUser(options) {
 
 //check how much time has passed since modification
 function runNotify(frequency) {
-    if (localStorage.getItem("lastNotify") == null) {
+    if (localStorage.getItem("lastNotify") === null) {
         //store timestamp
         localStorage.setItem("lastNotify", +new Date())
         return true
@@ -106,10 +109,9 @@ function runNotify(frequency) {
     const diffTime = Math.abs(now - notifyTime)
     const minutesPassed = Math.ceil(diffTime / (1000 * 60))
 
-    if (minutesPassed >= frequency) {
+    if (minutesPassed > frequency) {
         return true
     } else {
         return false
     }
-
 }
